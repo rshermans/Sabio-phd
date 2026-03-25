@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{uid}
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - name: string (required) - Display name
+    //   - email: string (required) - Email address
+    //   - role: string (required) - "student" or "teacher"
+    //
+    // Collection: /texts/{textId}
+    // Fields:
+    //   - title: string (required) - Title of the text
+    //   - content: string (required) - Content of the text
+    //   - teacherId: string (required) - UID of the teacher
+    //   - createdAt: timestamp (required) - Creation timestamp
+    //
+    // Collection: /texts/{textId}/questions/{questionId}
+    // Fields:
+    //   - textId: string (required) - ID of the text
+    //   - question: string (required) - The question text
+    //   - options: list (required) - Multiple choice options
+    //   - correctAnswer: int (required) - Index of the correct answer
+    //
+    // Collection: /texts/{textId}/progress/{studentId}
+    // Fields:
+    //   - textId: string (required) - ID of the text
+    //   - studentId: string (required) - UID of the student
+    //   - studentName: string (required) - Name of the student
+    //   - comprehensionScore: number (required) - Current score (0-100)
+    //   - lastActive: timestamp (required) - Last activity timestamp
+    //   - notes: string (optional) - Student's notes
+    //
+    // Collection: /texts/{textId}/answers/{answerId}
+    // Fields:
+    //   - textId: string (required) - ID of the text
+    //   - studentId: string (required) - UID of the student
+    //   - questionId: string (required) - ID of the question
+    //   - isCorrect: bool (required) - Whether the answer was correct
+    //   - timestamp: timestamp (required) - Answer timestamp
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          (request.auth.token.email == "relia.informa@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    function isStudent() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student';
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'name', 'email', 'role']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['student', 'teacher'];
+    }
+
+    function isValidText(data) {
+      return hasOnlyAllowedFields(['title', 'content', 'teacherId', 'createdAt', 'targetLevel', 'keyVocabulary']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 100000 &&
+             data.teacherId == request.auth.uid &&
+             data.createdAt is timestamp &&
+             (!('targetLevel' in data) || data.targetLevel in ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']) &&
+             (!('keyVocabulary' in data) || (data.keyVocabulary is list && data.keyVocabulary.size() < 50));
+    }
+
+    function isValidQuestion(data) {
+      return hasOnlyAllowedFields(['textId', 'question', 'options', 'correctAnswer']) &&
+             data.textId is string &&
+             data.question is string && data.question.size() > 0 && data.question.size() < 1000 &&
+             data.options is list && data.options.size() >= 2 && data.options.size() <= 6 &&
+             data.correctAnswer is int && data.correctAnswer >= 0 && data.correctAnswer < data.options.size();
+    }
+
+    function isValidProgress(data) {
+      return hasOnlyAllowedFields(['id', 'textId', 'studentId', 'studentName', 'comprehensionScore', 'lastActive', 'notes', 'scrollPosition', 'timeSpent', 'chatHistory']) &&
+             data.id == request.auth.uid &&
+             data.textId is string &&
+             data.studentId == request.auth.uid &&
+             data.studentName is string && data.studentName.size() > 0 &&
+             data.comprehensionScore is number && data.comprehensionScore >= 0 && data.comprehensionScore <= 100 &&
+             data.lastActive is timestamp &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 5000)) &&
+             (!('scrollPosition' in data) || (data.scrollPosition is number && data.scrollPosition >= 0)) &&
+             (!('timeSpent' in data) || (data.timeSpent is number && data.timeSpent >= 0)) &&
+             (!('chatHistory' in data) || (data.chatHistory is list && data.chatHistory.size() < 100));
+    }
+
+    function isValidAnswer(data) {
+      return hasOnlyAllowedFields(['id', 'textId', 'studentId', 'questionId', 'isCorrect', 'timestamp']) &&
+             data.id is string &&
+             data.textId is string &&
+             data.studentId == request.auth.uid &&
+             data.questionId is string &&
+             data.isCorrect is bool &&
+             data.timestamp is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if (isOwner(uid) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || isAdmin();
+    }
+
+    match /texts/{textId} {
+      allow read: if isAuthenticated();
+      allow create: if isTeacher() && isValidText(request.resource.data);
+      allow update: if isTeacher() && resource.data.teacherId == request.auth.uid && isValidText(request.resource.data);
+      allow delete: if isTeacher() && resource.data.teacherId == request.auth.uid;
+
+      match /questions/{questionId} {
+        allow read: if isAuthenticated();
+        allow create: if isTeacher() && get(/databases/$(database)/documents/texts/$(textId)).data.teacherId == request.auth.uid && isValidQuestion(request.resource.data);
+        allow update: if isTeacher() && get(/databases/$(database)/documents/texts/$(textId)).data.teacherId == request.auth.uid && isValidQuestion(request.resource.data);
+        allow delete: if isTeacher() && get(/databases/$(database)/documents/texts/$(textId)).data.teacherId == request.auth.uid;
+      }
+
+      match /progress/{studentId} {
+        allow read: if isOwner(studentId) || (isTeacher() && get(/databases/$(database)/documents/texts/$(textId)).data.teacherId == request.auth.uid);
+        allow create: if isOwner(studentId) && isValidProgress(request.resource.data);
+        allow update: if isOwner(studentId) && isValidProgress(request.resource.data);
+      }
+
+      match /answers/{answerId} {
+        allow read: if isStudent() && resource.data.studentId == request.auth.uid || (isTeacher() && get(/databases/$(database)/documents/texts/$(textId)).data.teacherId == request.auth.uid);
+        allow create: if isStudent() && isValidAnswer(request.resource.data);
+      }
+    }
+  }
+}

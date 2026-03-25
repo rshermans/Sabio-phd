@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the platform (student or teacher)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Display name" },
+        "email": { "type": "string", "description": "Email address" },
+        "role": { "type": "string", "enum": ["student", "teacher"], "description": "User role" }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Text": {
+      "title": "Text",
+      "description": "A text to be studied",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the text" },
+        "content": { "type": "string", "description": "Content of the text" },
+        "teacherId": { "type": "string", "description": "UID of the teacher who created the text" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "targetLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"], "description": "Target CEFR level" },
+        "keyVocabulary": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of key terms to learn"
+        }
+      },
+      "required": ["title", "content", "teacherId", "createdAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "A comprehension question related to a text",
+      "type": "object",
+      "properties": {
+        "textId": { "type": "string", "description": "ID of the associated text" },
+        "question": { "type": "string", "description": "The question text" },
+        "options": { "type": "array", "items": { "type": "string" }, "description": "Multiple choice options" },
+        "correctAnswer": { "type": "integer", "description": "Index of the correct answer" }
+      },
+      "required": ["textId", "question", "options", "correctAnswer"]
+    },
+    "StudentProgress": {
+      "title": "StudentProgress",
+      "description": "Real-time progress of a student on a text",
+      "type": "object",
+      "properties": {
+        "textId": { "type": "string", "description": "ID of the text" },
+        "studentId": { "type": "string", "description": "UID of the student" },
+        "studentName": { "type": "string", "description": "Name of the student" },
+        "comprehensionScore": { "type": "number", "description": "Current score (0-100)" },
+        "scrollPosition": { "type": "number", "description": "Last scroll position in the text reader" },
+        "timeSpent": { "type": "number", "description": "Total time spent reading in seconds" },
+        "lastActive": { "type": "string", "format": "date-time", "description": "Last activity timestamp" },
+        "notes": { "type": "string", "description": "Student's notes or AI feedback" },
+        "chatHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["user", "model"] },
+              "text": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      },
+      "required": ["textId", "studentId", "studentName", "comprehensionScore", "lastActive"]
+    },
+    "StudentAnswer": {
+      "title": "StudentAnswer",
+      "description": "A student's answer to a question",
+      "type": "object",
+      "properties": {
+        "textId": { "type": "string", "description": "ID of the text" },
+        "studentId": { "type": "string", "description": "UID of the student" },
+        "questionId": { "type": "string", "description": "ID of the question" },
+        "isCorrect": { "type": "boolean", "description": "Whether the answer was correct" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Answer timestamp" }
+      },
+      "required": ["textId", "studentId", "questionId", "isCorrect", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/texts/{textId}": { "schema": "Text", "description": "Texts created by teachers" },
+    "/texts/{textId}/questions/{questionId}": { "schema": "Question", "description": "Questions for a specific text" },
+    "/texts/{textId}/progress/{studentId}": { "schema": "StudentProgress", "description": "Student progress tracking" },
+    "/texts/{textId}/answers/{answerId}": { "schema": "StudentAnswer", "description": "Student answers for tracking" }
+  }
+}
