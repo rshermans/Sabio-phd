@@ -5,9 +5,9 @@ import { collection, query, where, getDocs, doc, setDoc, onSnapshot, serverTimes
 import { TextContent, Question, StudentProgress, StudentAnswer, UserProfile, ChatMessage } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { BookOpen, CheckCircle, XCircle, HelpCircle, MessageSquare, Sparkles, ChevronRight, ChevronLeft, Send, Loader2, Share2 } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { OperationType, FirestoreErrorInfo } from '../types';
+import { useTranslation } from 'react-i18next';
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
@@ -39,6 +39,7 @@ interface TextReaderProps {
 export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
   const { textId: urlTextId } = useParams<{ textId: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [texts, setTexts] = useState<TextContent[]>([]);
   const [selectedText, setSelectedText] = useState<TextContent | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -54,9 +55,6 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [timeSpent, setTimeSpent] = useState(0);
   const textContainerRef = useRef<HTMLDivElement>(null);
-
-  // Initialize AI
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   useEffect(() => {
     const fetchTexts = async () => {
@@ -267,16 +265,23 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
     setIsAiLoading(true);
 
     try {
-      const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
-        config: {
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
           systemInstruction: `És o motor de inteligência literária Sábio. O teu objetivo é sustentar um workflow de aprendizagem personalizado para o Ensino Secundário em Portugal.
+          
+          COMUNICAÇÃO:
+          - Deves comunicar SEMPRE em PORTUGUÊS (Portugal), independentemente da língua do utilizador.
+          - Usa o Novo Acordo Ortográfico.
           
           CONTEXTO PEDAGÓGICO:
           - Texto em estudo: "${selectedText.content}"
-          - Nível Alvo (CEFR): ${selectedText.targetLevel || 'B1'}
-          - Taxonomia de Bloom: ${selectedText.bloomLevel || 'Understand'}
-          - Webb DOK: ${selectedText.webbLevel || 'L1'}
+          - Nível de Taxonomia de Bloom: ${selectedText.bloomLevel || 'Understand'}
+          - Nível Webb DOK: ${selectedText.webbLevel || 'L1'}
           - Vocabulário Chave: ${selectedText.keyVocabulary?.join(', ') || 'Nenhum especificado'}
           - Modelo de Avaliação: Segue rigorosamente o "Modelo Unificado Sábio" (Níveis 1 a 5).
           - Justiça Algorítmica: Sê imparcial, justifica todas as avaliações com base em evidências textuais.
@@ -284,17 +289,20 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
           
           DIRETRIZES DE RESPOSTA:
           1. Responde sempre de forma pedagógica e incentivadora.
-          2. Usa o Novo Acordo Ortográfico.
-          3. Enfatiza o vocabulário chave quando relevante para a explicação.
-          4. Se o aluno pedir uma pergunta, cria uma de "interpretação profunda" baseada no Grupo I dos exames nacionais.
-          5. Se o aluno submeter uma resposta longa, avalia-a de 1 a 5 nos parâmetros: Conteúdo, Estruturação e Linguística.`,
-        },
+          2. Enfatiza o vocabulário chave quando relevante para a explicação.
+          3. Se o aluno pedir uma pergunta, cria uma de "interpretação profunda" baseada no Grupo I dos exames nacionais.
+          4. Se o aluno submeter uma resposta longa, avalia-a de 1 a 5 nos parâmetros: Conteúdo, Estruturação e Linguística.`,
+        }),
       });
 
-      const response = await chat.sendMessage({ message: prompt });
+      if (!response.ok) {
+        throw new Error('Failed to generate AI response');
+      }
+
+      const data = await response.json();
       const modelResponse: ChatMessage = { 
         role: 'model', 
-        text: response.text || 'Desculpa, não consegui processar a tua pergunta.',
+        text: data.text || 'Desculpa, não consegui processar a tua pergunta.',
         timestamp: new Date().toISOString()
       };
       const finalChat = [...updatedChat, modelResponse];
@@ -343,7 +351,7 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
   if (!selectedText) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12">
-        <h1 className="text-3xl font-bold text-slate-900 mb-8">Escolhe um texto para estudar</h1>
+        <h1 className="text-3xl font-bold text-slate-900 mb-8">{t('choose_text')}</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {texts.map(text => (
             <motion.div 
@@ -363,7 +371,7 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
                       ? 'bg-emerald-100 text-emerald-600' 
                       : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
                   }`}
-                  title="Partilhar"
+                  title={t('share')}
                 >
                   {copiedId === text.id ? <CheckCircle className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
                 </button>
@@ -371,7 +379,7 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
               <h2 className="text-xl font-bold text-slate-900 mb-2">{text.title}</h2>
               <p className="text-slate-500 text-sm line-clamp-3 mb-4">{text.content}</p>
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Professor ID: {text.teacherId.substring(0, 8)}</span>
+                <span>{t('teacher')} ID: {text.teacherId.substring(0, 8)}</span>
                 <span>{new Date(text.createdAt?.seconds * 1000).toLocaleDateString()}</span>
               </div>
             </motion.div>
@@ -397,14 +405,14 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
           className="flex items-center gap-2 text-slate-500 hover:text-slate-900 mb-6 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
-          <span>Voltar aos textos</span>
+          <span>{t('back_to_texts')}</span>
         </button>
 
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm mb-8">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
               <BookOpen className="w-3 h-3" />
-              <span>Tempo de estudo: {Math.floor(timeSpent / 60)}m {timeSpent % 60}s</span>
+              <span>{t('study_time')}: {Math.floor(timeSpent / 60)}m {timeSpent % 60}s</span>
             </div>
             <AnimatePresence>
               {isSaving && (
@@ -415,7 +423,7 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
                   className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full flex items-center gap-1"
                 >
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Progresso guardado
+                  {t('progress_saved')}
                 </motion.span>
               )}
             </AnimatePresence>
@@ -424,16 +432,13 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
             <div className="flex-1">
               <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-tight mb-2">{selectedText.title}</h1>
               <div className="flex flex-wrap gap-2">
-                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-md uppercase tracking-wider">
-                  CEFR: {selectedText.targetLevel}
-                </span>
                 {selectedText.bloomLevel && (
-                  <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-md uppercase tracking-wider" title="Taxonomia de Bloom">
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-md uppercase tracking-wider" title={t('bloom_level')}>
                     Bloom: {selectedText.bloomLevel}
                   </span>
                 )}
                 {selectedText.webbLevel && (
-                  <span className="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-md uppercase tracking-wider" title="Webb Depth of Knowledge">
+                  <span className="px-2 py-1 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-md uppercase tracking-wider" title={t('webb_level')}>
                     Webb: {selectedText.webbLevel}
                   </span>
                 )}
@@ -448,7 +453,7 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
               }`}
             >
               {shareStatus === 'copied' ? <CheckCircle className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-              <span>{shareStatus === 'copied' ? 'Copiado!' : 'Partilhar'}</span>
+              <span>{shareStatus === 'copied' ? t('copied') : t('share')}</span>
             </button>
           </div>
           <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap">
@@ -459,8 +464,8 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
         {questions.length > 0 && (
           <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200 mb-12">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-slate-900">Verificação de Compreensão</h2>
-              <span className="text-sm font-medium text-slate-500">Questão {currentQuestionIndex + 1} de {questions.length}</span>
+              <h2 className="text-2xl font-bold text-slate-900">{t('comprehension_check')}</h2>
+              <span className="text-sm font-medium text-slate-500">{t('questions')} {currentQuestionIndex + 1} {t('of')} {questions.length}</span>
             </div>
 
             <AnimatePresence mode="wait">
@@ -484,17 +489,14 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
 
                     if (showFeedback) {
                       if (isCorrect) {
-                        bgColor = 'bg-emerald-50';
+                        bgColor = 'bg-emerald-100';
                         borderColor = 'border-emerald-500';
-                        textColor = 'text-emerald-700';
+                        textColor = 'text-emerald-900';
                       } else if (isSelected) {
-                        bgColor = 'bg-red-50';
+                        bgColor = 'bg-red-100';
                         borderColor = 'border-red-500';
-                        textColor = 'text-red-700';
+                        textColor = 'text-red-900';
                       }
-                    } else if (isSelected) {
-                      bgColor = 'bg-emerald-50';
-                      borderColor = 'border-emerald-500';
                     }
 
                     return (
@@ -521,14 +523,14 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
                 className="flex items-center gap-2 text-slate-600 hover:text-slate-900 disabled:opacity-30"
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span>Anterior</span>
+                <span>{t('back')}</span>
               </button>
               <button
                 disabled={currentQuestionIndex === questions.length - 1}
                 onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
                 className="flex items-center gap-2 text-slate-600 hover:text-slate-900 disabled:opacity-30"
               >
-                <span>Próxima</span>
+                <span>{t('next')}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -541,7 +543,7 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
         <div className="p-4 bg-emerald-600 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Sparkles className="w-5 h-5" />
-            <h3 className="font-bold">Tutor IA EduPorto</h3>
+            <h3 className="font-bold">{t('ai_tutor')}</h3>
           </div>
           <div className="flex gap-2">
             <button 
@@ -549,14 +551,14 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
               disabled={isAiLoading}
               className="text-[10px] uppercase tracking-wider font-bold bg-white/20 hover:bg-white/30 px-2 py-1 rounded-lg transition-colors"
             >
-              Gramática
+              {t('grammar')}
             </button>
             <button 
               onClick={suggestQuestion}
               disabled={isAiLoading}
               className="text-[10px] uppercase tracking-wider font-bold bg-white/20 hover:bg-white/30 px-2 py-1 rounded-lg transition-colors"
             >
-              Sugerir Pergunta
+              {t('suggest_question')}
             </button>
           </div>
         </div>
@@ -590,7 +592,7 @@ export const TextReader: React.FC<TextReaderProps> = ({ userProfile }) => {
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleAiAsk()}
-            placeholder="Pergunta ao tutor..."
+            placeholder={t('ask_tutor')}
             className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-sm"
           />
           <button 

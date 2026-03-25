@@ -8,6 +8,7 @@ export interface UserProfile {
   xp?: number;
   streak?: number;
   badges?: string[];
+  classIds?: string[];
 }
 
 export interface Checkpoint {
@@ -28,17 +29,27 @@ export interface LearningPath {
 export type BloomLevel = 'Remember' | 'Understand' | 'Apply' | 'Analyze' | 'Evaluate' | 'Create';
 export type WebbLevel = 'L1' | 'L2' | 'L3' | 'L4';
 
+export interface Class {
+  id: string;
+  name: string;
+  teacherId: string;
+  teacherName: string;
+  inviteCode: string;
+  studentIds: string[];
+  createdAt: any;
+}
+
 export interface TextContent {
   id: string;
   title: string;
   content: string;
   teacherId: string;
   createdAt: any;
-  targetLevel?: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
   bloomLevel?: BloomLevel;
   webbLevel?: WebbLevel;
   keyVocabulary?: string[];
   learningPathId?: string;
+  classId?: string;
 }
 
 export interface Question {

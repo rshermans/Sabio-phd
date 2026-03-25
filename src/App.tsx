@@ -8,9 +8,11 @@ import { TextReader } from './components/TextReader';
 import { TeacherDashboard } from './components/TeacherDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { TextEditor } from './components/TextEditor';
+import { ClassManagement } from './components/ClassManagement';
 import { motion, AnimatePresence } from 'motion/react';
 import { BookOpen, Users, Sparkles, GraduationCap, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import { HashRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 export default function App() {
   return (
@@ -25,6 +27,7 @@ function AppContent() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -77,6 +80,7 @@ function AppContent() {
                         : <StudentDashboard userProfile={userProfile} />
                     } 
                   />
+                  <Route path="/classes" element={<ClassManagement userProfile={userProfile} />} />
                   <Route path="/reader/:textId" element={<TextReader userProfile={userProfile} />} />
                   <Route path="/reader" element={<TextReader userProfile={userProfile} />} />
                   {userProfile.role === 'teacher' && (
@@ -96,6 +100,8 @@ function AppContent() {
 }
 
 const LandingPage: React.FC<{ userProfile: UserProfile | null }> = ({ userProfile }) => {
+  const { t } = useTranslation();
+  
   return (
     <div className="max-w-7xl mx-auto px-4 py-16 sm:py-24">
       {/* Hero Section */}
@@ -106,14 +112,14 @@ const LandingPage: React.FC<{ userProfile: UserProfile | null }> = ({ userProfil
           className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-bold mb-8"
         >
           <Sparkles className="w-4 h-4" />
-          <span>Apoio ao Ensino Secundário em Portugal</span>
+          <span>{t('app_tagline')}</span>
         </motion.div>
         <h1 className="text-6xl sm:text-7xl font-black text-slate-900 tracking-tight mb-8 leading-[1.1]">
-          Aprendizagem Personalizada com <br />
-          <span className="text-emerald-600">Sábio</span>
+          {t('hero_title').split(' ').slice(0, -1).join(' ')} <br />
+          <span className="text-emerald-600">{t('hero_title').split(' ').pop()}</span>
         </h1>
         <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-12 leading-relaxed">
-          O teu tutor pessoal de Português. Planos de estudo individuais, análise profunda de textos e progresso real rumo ao sucesso no Secundário.
+          {t('hero_subtitle')}
         </p>
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -122,11 +128,11 @@ const LandingPage: React.FC<{ userProfile: UserProfile | null }> = ({ userProfil
               to="/dashboard"
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-2 transition-all shadow-xl shadow-emerald-200"
             >
-              <span>Ir para o meu Painel</span>
+              <span>{t('dashboard')}</span>
               <ArrowRight className="w-5 h-5" />
             </Link>
           ) : (
-            <p className="text-slate-400 font-medium">Faz login para começar a estudar</p>
+            <p className="text-slate-400 font-medium">{t('login')} {t('get_started')}</p>
           )}
         </div>
       </div>
@@ -134,19 +140,19 @@ const LandingPage: React.FC<{ userProfile: UserProfile | null }> = ({ userProfil
       {/* Features Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <FeatureCard 
-          icon={<GraduationCap className="w-8 h-8 text-emerald-600" />}
-          title="Tutoria 1-para-1"
-          description="Inspirado no modelo Preply, o Sábio oferece uma experiência personalizada que constrói confiança e acelera a fluência literária."
+          icon={<Sparkles className="w-8 h-8 text-emerald-600" />}
+          title={t('feature_ai_title')}
+          description={t('feature_ai_desc')}
         />
         <FeatureCard 
           icon={<Users className="w-8 h-8 text-blue-600" />}
-          title="Planos Individuais"
-          description="Cada aluno tem o seu ritmo. O motor Sábio adapta-se às dificuldades específicas, focando no vocabulário e gramática necessários."
+          title={t('feature_tracking_title')}
+          description={t('feature_tracking_desc')}
         />
         <FeatureCard 
-          icon={<BookOpen className="w-8 h-8 text-amber-600" />}
-          title="Sucesso no Secundário"
-          description="Preparação rigorosa para os exames nacionais com análise profunda de textos e feedback imediato baseado no currículo."
+          icon={<GraduationCap className="w-8 h-8 text-amber-600" />}
+          title={t('feature_gamification_title')}
+          description={t('feature_gamification_desc')}
         />
       </div>
 
@@ -154,12 +160,10 @@ const LandingPage: React.FC<{ userProfile: UserProfile | null }> = ({ userProfil
       <div className="mt-32 bg-slate-900 rounded-[3rem] p-12 sm:p-20 text-white overflow-hidden relative">
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div>
-            <h2 className="text-4xl sm:text-5xl font-bold mb-8 leading-tight">Para Professores: <br/>Gestão de Aprendizagem Personalizada</h2>
+            <h2 className="text-4xl sm:text-5xl font-bold mb-8 leading-tight">{t('teacher')}: <br/>{t('real_time_tracking')}</h2>
             <ul className="space-y-6">
-              <BenefitItem text="Criação de conteúdos com definição de nível CEFR e vocabulário chave." />
-              <BenefitItem text="Acesso total ao histórico de interações dos alunos com o Tutor IA." />
-              <BenefitItem text="Identificação de lacunas de compreensão por aluno ou por turma." />
-              <BenefitItem text="Relatórios de progresso inspirados no sucesso do modelo Preply." />
+              <BenefitItem text={t('feature_tracking_desc')} />
+              <BenefitItem text={t('feature_ai_desc')} />
             </ul>
           </div>
           <div className="bg-white/10 backdrop-blur-xl p-8 rounded-3xl border border-white/10">
@@ -169,11 +173,11 @@ const LandingPage: React.FC<{ userProfile: UserProfile | null }> = ({ userProfil
               <div className="grid grid-cols-2 gap-4 mt-8">
                 <div className="h-24 bg-emerald-500/20 rounded-2xl border border-emerald-500/30 flex flex-col items-center justify-center">
                   <span className="text-2xl font-bold text-emerald-400">85%</span>
-                  <span className="text-xs opacity-60">Compreensão Média</span>
+                  <span className="text-xs opacity-60">{t('comprehension')}</span>
                 </div>
                 <div className="h-24 bg-blue-500/20 rounded-2xl border border-blue-500/30 flex flex-col items-center justify-center">
                   <span className="text-2xl font-bold text-blue-400">12</span>
-                  <span className="text-xs opacity-60">Alunos Ativos</span>
+                  <span className="text-xs opacity-60">{t('active_students')}</span>
                 </div>
               </div>
             </div>

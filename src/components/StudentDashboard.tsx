@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import { UserProfile, LearningPath } from '../types';
 import { motion } from 'motion/react';
 import { Trophy, Flame, BookOpen, CheckCircle, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface StudentDashboardProps {
   userProfile: UserProfile;
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ userProfile }) => {
+  const { t } = useTranslation();
   // Mock data for now - will be replaced by Firestore data
   const learningPath: LearningPath = {
     id: '1',
@@ -26,13 +28,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ userProfile 
       {/* Header with Gamification */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 mb-2">Olá, {userProfile.name}!</h1>
-          <p className="text-slate-500">Continua a tua jornada de aprendizagem.</p>
+          <h1 className="text-4xl font-black text-slate-900 mb-2">{t('hello')}, {userProfile.name}!</h1>
+          <p className="text-slate-500">{t('continue_journey')}</p>
         </div>
         <div className="flex gap-4">
           <div className="bg-orange-50 text-orange-600 px-6 py-3 rounded-2xl flex items-center gap-3 font-bold">
             <Flame className="w-6 h-6" />
-            <span>{userProfile.streak || 0} dias de streak</span>
+            <span>{userProfile.streak || 0} {t('streak_days')}</span>
           </div>
           <div className="bg-emerald-50 text-emerald-700 px-6 py-3 rounded-2xl flex items-center gap-3 font-bold">
             <Trophy className="w-6 h-6" />
@@ -45,7 +47,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ userProfile 
       <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-bold">{learningPath.title}</h2>
-          <div className="text-sm font-bold text-slate-500">{learningPath.progress}% concluído</div>
+          <div className="text-sm font-bold text-slate-500">{learningPath.progress}% {t('completed')}</div>
         </div>
         
         <div className="space-y-4">
@@ -63,7 +65,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ userProfile 
                   to="/reader"
                   className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 transition-all flex items-center gap-2"
                 >
-                  Começar <ChevronRight className="w-4 h-4" />
+                  {t('start')} <ChevronRight className="w-4 h-4" />
                 </Link>
               )}
             </div>

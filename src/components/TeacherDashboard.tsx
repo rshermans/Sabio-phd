@@ -5,6 +5,8 @@ import { TextContent, StudentProgress, UserProfile, ChatMessage } from '../types
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, BookOpen, Clock, TrendingUp, Trash2, ChevronRight, MessageSquare, AlertCircle, Loader2, X, Sparkles } from 'lucide-react';
 import { OperationType, FirestoreErrorInfo } from '../types';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
@@ -34,6 +36,7 @@ interface TeacherDashboardProps {
 }
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile }) => {
+  const { t } = useTranslation();
   const [myTexts, setMyTexts] = useState<TextContent[]>([]);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [studentProgress, setStudentProgress] = useState<StudentProgress[]>([]);
@@ -60,7 +63,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
       const q = query(collection(db, `texts/${selectedTextId}/progress`));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const progress = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProgress));
-        setStudentProgress(progress.sort((a, b) => b.lastActive?.seconds - a.lastActive?.seconds));
+        setStudentProgress(progress.sort((a, b) => (b.lastActive?.seconds || 0) - (a.lastActive?.seconds || 0)));
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, `texts/${selectedTextId}/progress`);
       });
@@ -69,7 +72,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
   }, [selectedTextId]);
 
   const handleDeleteText = async (textId: string) => {
-    if (window.confirm('Tens a certeza que queres apagar este texto? Todos os dados de progresso serão perdidos.')) {
+    if (window.confirm(t('confirm_delete_text'))) {
       try {
         await deleteDoc(doc(db, 'texts', textId));
         if (selectedTextId === textId) {
@@ -93,15 +96,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
     <div className="max-w-7xl mx-auto px-4 py-8 h-[calc(100vh-64px)] flex flex-col lg:flex-row gap-8">
       {/* Sidebar: My Texts */}
       <div className="w-full lg:w-80 flex flex-col bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-        <div className="p-4 bg-slate-900 text-white flex items-center gap-3">
-          <BookOpen className="w-5 h-5" />
-          <h3 className="font-bold">Meus Textos</h3>
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BookOpen className="w-5 h-5" />
+            <h3 className="font-bold">{t('my_texts')}</h3>
+          </div>
+          <Link to="/editor" className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+            <TrendingUp className="w-4 h-4 rotate-45" />
+          </Link>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
           {myTexts.length === 0 ? (
             <div className="p-8 text-center text-slate-400">
               <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-20" />
-              <p className="text-sm">Ainda não criaste nenhum texto.</p>
+              <p className="text-sm">{t('no_texts_found')}</p>
             </div>
           ) : (
             myTexts.map(text => (
@@ -116,9 +124,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
                   <div className="flex flex-col gap-1">
                     <p className="font-bold truncate text-sm">{text.title}</p>
                     <div className="flex flex-wrap gap-1">
-                      {text.targetLevel && (
-                        <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">{text.targetLevel}</span>
-                      )}
                       {text.bloomLevel && (
                         <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Bloom: {text.bloomLevel}</span>
                       )}
@@ -148,13 +153,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
       <div className="flex-1 bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex flex-col">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Acompanhamento em Tempo Real</h2>
-            <p className="text-slate-500 text-sm">Monitoriza o progresso e compreensão dos teus alunos.</p>
+            <h2 className="text-2xl font-bold text-slate-900">{t('real_time_tracking')}</h2>
+            <p className="text-slate-500 text-sm">{t('student_monitoring')}</p>
           </div>
           <div className="flex items-center gap-4">
             <div className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl flex items-center gap-2">
               <Users className="w-4 h-4" />
-              <span className="font-bold">{studentProgress.length} Alunos Ativos</span>
+              <span className="font-bold">{studentProgress.length} {t('active_students')}</span>
             </div>
           </div>
         </div>
@@ -164,16 +169,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
             studentProgress.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-400">
                 <Users className="w-16 h-16 mb-4 opacity-10" />
-                <p className="text-lg font-medium">Nenhum aluno começou a estudar este texto ainda.</p>
-                <p className="text-sm">Partilha o título do texto com a tua turma!</p>
+                <p className="text-lg font-medium">{t('no_students_yet')}</p>
+                <p className="text-sm">{t('share_text_with_class')}</p>
               </div>
             ) : (
               <div className="grid gap-4">
                 <div className="grid grid-cols-12 px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  <div className="col-span-4">Estudante</div>
-                  <div className="col-span-3">Compreensão</div>
-                  <div className="col-span-3">Última Atividade</div>
-                  <div className="col-span-2 text-right">Ações</div>
+                  <div className="col-span-4">{t('student')}</div>
+                  <div className="col-span-3">{t('comprehension')}</div>
+                  <div className="col-span-3">{t('last_activity')}</div>
+                  <div className="col-span-2 text-right">{t('actions')}</div>
                 </div>
                 {studentProgress.map(progress => (
                   <motion.div 
@@ -189,7 +194,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
                       </div>
                       <div>
                         <p className="font-bold text-slate-900">{progress.studentName}</p>
-                        <p className="text-xs text-slate-400 truncate max-w-[150px]">{progress.notes || 'Sem notas'}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[150px]">{progress.notes || t('no_notes')}</p>
                       </div>
                     </div>
                     
@@ -216,7 +221,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
 
                     <div className="col-span-3 flex items-center gap-2 text-slate-500 text-sm">
                       <Clock className="w-4 h-4" />
-                      <span>{new Date(progress.lastActive?.seconds * 1000).toLocaleTimeString()}</span>
+                      <span>{progress.lastActive?.seconds ? new Date(progress.lastActive.seconds * 1000).toLocaleTimeString() : ''}</span>
                     </div>
 
                     <div className="col-span-2 text-right">
@@ -234,7 +239,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-slate-400">
               <BookOpen className="w-16 h-16 mb-4 opacity-10" />
-              <p className="text-lg font-medium">Seleciona um texto para ver o progresso.</p>
+              <p className="text-lg font-medium">{t('select_text_to_see_details')}</p>
             </div>
           )}
         </div>
@@ -257,7 +262,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
                   </div>
                   <div>
                     <h3 className="font-bold text-lg">{selectedStudent.studentName}</h3>
-                    <p className="text-xs text-white/70">Interações com Tutor IA</p>
+                    <p className="text-xs text-white/70">{t('ai_interactions')}</p>
                   </div>
                 </div>
                 <button 
@@ -280,14 +285,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
                         {msg.text}
                       </div>
                       <span className="text-[10px] text-slate-400 mt-1 px-2">
-                        {msg.role === 'user' ? 'Aluno' : 'Tutor IA'} • {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
+                        {msg.role === 'user' ? t('student') : t('ai_tutor')} • {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
                       </span>
                     </div>
                   ))
                 ) : (
                   <div className="text-center py-12 text-slate-400">
                     <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-10" />
-                    <p>Este aluno ainda não interagiu com o Tutor IA.</p>
+                    <p>{t('no_ai_interactions')}</p>
                   </div>
                 )}
               </div>
@@ -295,12 +300,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
               <div className="p-6 border-t border-slate-100 bg-white flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex flex-col">
-                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Compreensão</span>
+                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('comprehension')}</span>
                     <span className="text-xl font-black text-slate-900">{Math.round(selectedStudent.comprehensionScore)}%</span>
                   </div>
                   <div className="w-px h-8 bg-slate-100 mx-2" />
                   <div className="flex flex-col">
-                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">Tempo de Estudo</span>
+                    <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">{t('study_time')}</span>
                     <span className="text-xl font-black text-slate-900">{Math.floor((selectedStudent.timeSpent || 0) / 60)}m</span>
                   </div>
                 </div>
@@ -308,7 +313,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ userProfile 
                   onClick={() => setSelectedStudent(null)}
                   className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-slate-800 transition-all"
                 >
-                  Fechar
+                  {t('close')}
                 </button>
               </div>
             </motion.div>

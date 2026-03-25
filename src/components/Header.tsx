@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { auth, db } from '../firebase';
 import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { UserProfile, UserRole } from '../types';
-import { LogIn, LogOut, User, BookOpen, LayoutDashboard, PlusCircle, Loader2 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { LogIn, LogOut, User, BookOpen, LayoutDashboard, PlusCircle, Loader2, Languages } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 interface HeaderProps {
   userProfile: UserProfile | null;
@@ -15,7 +16,14 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ userProfile, onProfileUpdate }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const [isLoggingIn, setIsLoggingIn] = React.useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
+
+  const toggleLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    setShowLangMenu(false);
+  };
 
   const handleLogin = async () => {
     if (isLoggingIn) return;
@@ -71,7 +79,7 @@ export const Header: React.FC<HeaderProps> = ({ userProfile, onProfileUpdate }) 
           <div className="bg-emerald-600 p-2 rounded-lg">
             <BookOpen className="text-white w-6 h-6" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">Sábio</span>
+          <span className="text-xl font-bold tracking-tight text-slate-900">{t('app_name')}</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">
@@ -81,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({ userProfile, onProfileUpdate }) 
                 to="/"
                 className={`text-sm font-medium transition-colors ${location.pathname === '/' ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                Início
+                {t('welcome')}
               </Link>
               {userProfile.role === 'teacher' ? (
                 <>
@@ -89,35 +97,82 @@ export const Header: React.FC<HeaderProps> = ({ userProfile, onProfileUpdate }) 
                     to="/dashboard"
                     className={`text-sm font-medium transition-colors ${location.pathname === '/dashboard' ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
                   >
-                    Painel do Professor
+                    {t('dashboard')}
                   </Link>
                   <Link 
                     to="/editor"
                     className={`text-sm font-medium transition-colors ${location.pathname === '/editor' ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
                   >
-                    Criar Texto
+                    {t('new_text')}
+                  </Link>
+                  <Link 
+                    to="/classes"
+                    className={`text-sm font-medium transition-colors ${location.pathname === '/classes' ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    {t('classes')}
                   </Link>
                 </>
               ) : (
-                <Link 
-                  to="/reader"
-                  className={`text-sm font-medium transition-colors ${location.pathname === '/reader' ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
-                >
-                  Meus Estudos
-                </Link>
+                <>
+                  <Link 
+                    to="/reader"
+                    className={`text-sm font-medium transition-colors ${location.pathname === '/reader' ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    {t('reader')}
+                  </Link>
+                  <Link 
+                    to="/classes"
+                    className={`text-sm font-medium transition-colors ${location.pathname === '/classes' ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    {t('classes')}
+                  </Link>
+                </>
               )}
             </>
           )}
         </nav>
 
         <div className="flex items-center gap-4">
+          <div className="relative">
+            <button 
+              onClick={() => setShowLangMenu(!showLangMenu)}
+              className="p-2 text-slate-500 hover:bg-slate-50 rounded-xl transition-all flex items-center gap-1"
+            >
+              <Languages className="w-5 h-5" />
+              <span className="text-xs font-bold uppercase">{i18n.language.split('-')[0]}</span>
+            </button>
+            <AnimatePresence>
+              {showLangMenu && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute right-0 mt-2 w-32 bg-white border border-slate-100 rounded-2xl shadow-xl p-2 z-50"
+                >
+                  <button 
+                    onClick={() => toggleLanguage('pt')}
+                    className={`w-full text-left px-4 py-2 rounded-xl text-sm font-bold transition-all ${i18n.language.startsWith('pt') ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    Português
+                  </button>
+                  <button 
+                    onClick={() => toggleLanguage('en')}
+                    className={`w-full text-left px-4 py-2 rounded-xl text-sm font-bold transition-all ${i18n.language.startsWith('en') ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    English
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {userProfile ? (
             <div className="flex items-center gap-4">
               <button 
                 onClick={toggleRole}
                 className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1 rounded-full transition-colors"
               >
-                Mudar para {userProfile.role === 'student' ? 'Professor' : 'Aluno'}
+                Mudar para {userProfile.role === 'student' ? t('teacher') : t('student')}
               </button>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -128,7 +183,7 @@ export const Header: React.FC<HeaderProps> = ({ userProfile, onProfileUpdate }) 
               <button 
                 onClick={handleLogout}
                 className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                title="Sair"
+                title={t('logout')}
               >
                 <LogOut className="w-5 h-5" />
               </button>
@@ -144,7 +199,7 @@ export const Header: React.FC<HeaderProps> = ({ userProfile, onProfileUpdate }) 
               ) : (
                 <LogIn className="w-4 h-4" />
               )}
-              <span>{isLoggingIn ? 'A entrar...' : 'Entrar'}</span>
+              <span>{isLoggingIn ? t('loading') : t('login')}</span>
             </button>
           )}
         </div>

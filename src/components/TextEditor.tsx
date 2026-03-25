@@ -4,10 +4,10 @@ import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/fires
 import { UserProfile, Question, BloomLevel, WebbLevel } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { PlusCircle, Trash2, Save, Sparkles, Loader2, CheckCircle, AlertCircle, ChevronRight, ChevronLeft, X, Upload, FileText } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
 import * as mammoth from 'mammoth';
 import * as pdfjs from 'pdfjs-dist';
 import ePub from 'epubjs';
+import { useTranslation } from 'react-i18next';
 
 // Set PDF.js worker using unpkg with .mjs extension for modern versions
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.mjs`;
@@ -18,9 +18,9 @@ interface TextEditorProps {
 }
 
 export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete }) => {
+  const { t, i18n } = useTranslation();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [targetLevel, setTargetLevel] = useState<'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'>('B1');
   const [bloomLevel, setBloomLevel] = useState<BloomLevel>('Understand');
   const [webbLevel, setWebbLevel] = useState<WebbLevel>('L1');
   const [vocabInput, setVocabInput] = useState('');
@@ -31,8 +31,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
   const [isParsing, setIsParsing] = useState(false);
   const [step, setStep] = useState<'text' | 'questions'>('text');
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,7 +70,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
         }
         extractedText = fullText;
       } else {
-        alert('Formato de ficheiro não suportado. Usa PDF, DOCX ou EPUB.');
+        alert(t('unsupported_file_format'));
         return;
       }
 
@@ -82,11 +80,11 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
           setTitle(file.name.replace(/\.[^/.]+$/, ""));
         }
       } else {
-        alert('Não foi possível extrair texto do ficheiro.');
+        alert(t('could_not_extract_text'));
       }
     } catch (error) {
       console.error('File parsing error:', error);
-      alert('Erro ao processar o ficheiro. Tenta novamente.');
+      alert(t('error_processing_file'));
     } finally {
       setIsParsing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -97,41 +95,39 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
     if (!content.trim()) return;
     setIsGenerating(true);
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analisa este texto para o nível CEFR ${targetLevel}, Taxonomia de Bloom: ${bloomLevel} e Webb DOK: ${webbLevel}. 
-        Gera 5 perguntas de escolha múltipla para testar a compreensão de leitura de alunos do ensino secundário em Portugal. 
-        As perguntas devem estar alinhadas com os níveis de complexidade cognitiva selecionados (Bloom: ${bloomLevel}, Webb: ${webbLevel}).
-        O texto é: "${content}". 
-        Vocabulário chave a enfatizar: ${keyVocabulary.join(', ')}.
-        Responde apenas em formato JSON seguindo o esquema fornecido.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING, description: "A pergunta" },
-                options: { 
-                  type: Type.ARRAY, 
-                  items: { type: Type.STRING },
-                  description: "4 opções de resposta"
-                },
-                correctAnswer: { type: Type.INTEGER, description: "Índice da resposta correta (0-3)" }
-              },
-              required: ["question", "options", "correctAnswer"]
-            }
-          }
-        }
+      const lang = i18n.language === 'pt' ? 'Português' : 'English';
+      const prompt = `Analyze this text for Bloom's Taxonomy: ${bloomLevel}, and Webb DOK: ${webbLevel}. 
+        Generate 5 multiple-choice questions to test reading comprehension for high school students. 
+        Questions must be aligned with the selected cognitive complexity levels (Bloom: ${bloomLevel}, Webb: ${webbLevel}).
+        The text is: "${content}". 
+        Key vocabulary to emphasize: ${keyVocabulary.join(', ')}.
+        Respond ONLY in JSON format following the provided schema. 
+        IMPORTANT: The output language MUST be ${lang}.`;
+
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          model: "gemini-3-flash-preview",
+        }),
       });
 
-      const generated = JSON.parse(response.text);
+      if (!response.ok) {
+        throw new Error('Failed to generate questions');
+      }
+
+      const data = await response.json();
+      // The backend returns { text: "..." }
+      // We need to parse the JSON string inside data.text
+      const generated = JSON.parse(data.text);
       setQuestions(generated);
       setStep('questions');
     } catch (error) {
       console.error('AI generation error:', error);
-      alert('Ocorreu um erro ao gerar as perguntas. Tenta novamente.');
+      alert(t('error_generating_questions'));
     } finally {
       setIsGenerating(false);
     }
@@ -146,7 +142,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
         content,
         teacherId: userProfile.uid,
         createdAt: serverTimestamp(),
-        targetLevel,
         bloomLevel,
         webbLevel,
         keyVocabulary
@@ -162,7 +157,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
       onComplete();
     } catch (error) {
       console.error('Save error:', error);
-      alert('Erro ao guardar o texto.');
+      alert(t('error_saving_text'));
     } finally {
       setIsSaving(false);
     }
@@ -191,16 +186,16 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Criar Novo Texto de Estudo</h1>
+        <h1 className="text-3xl font-bold text-slate-900">{t('create_new_study_text')}</h1>
         <div className="flex items-center gap-4">
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${step === 'text' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
             <span className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-xs">1</span>
-            Texto
+            {t('text')}
           </div>
           <ChevronRight className="w-4 h-4 text-slate-300" />
           <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold ${step === 'questions' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
             <span className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-xs">2</span>
-            Questões
+            {t('questions')}
           </div>
         </div>
       </div>
@@ -216,77 +211,65 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
           >
             <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">Título do Texto</label>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">{t('text_title')}</label>
                   <input 
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Ex: Os Maias - Episódio do Jantar no Hotel Central"
+                    placeholder={t('text_title_placeholder')}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">Nível Alvo (CEFR)</label>
-                  <select 
-                    value={targetLevel}
-                    onChange={(e) => setTargetLevel(e.target.value as any)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all bg-white"
-                  >
-                    {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(level => (
-                      <option key={level} value={level}>{level} - {level === 'B1' || level === 'B2' ? 'Intermédio' : level === 'C1' || level === 'C2' ? 'Avançado' : 'Iniciante'}</option>
-                    ))}
-                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">Taxonomia de Bloom</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">{t('bloom_taxonomy')}</label>
                   <select 
                     value={bloomLevel}
                     onChange={(e) => setBloomLevel(e.target.value as BloomLevel)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all bg-white"
                   >
-                    <option value="Remember">Lembrar (Recall)</option>
-                    <option value="Understand">Compreender (Understand)</option>
-                    <option value="Apply">Aplicar (Apply)</option>
-                    <option value="Analyze">Analisar (Analyze)</option>
-                    <option value="Evaluate">Avaliar (Evaluate)</option>
-                    <option value="Create">Criar (Create)</option>
+                    <option value="Remember">{t('bloom_remember')}</option>
+                    <option value="Understand">{t('bloom_understand')}</option>
+                    <option value="Apply">{t('bloom_apply')}</option>
+                    <option value="Analyze">{t('bloom_analyze')}</option>
+                    <option value="Evaluate">{t('bloom_evaluate')}</option>
+                    <option value="Create">{t('bloom_create')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">Webb Depth of Knowledge (DOK)</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">{t('webb_dok')}</label>
                   <select 
                     value={webbLevel}
                     onChange={(e) => setWebbLevel(e.target.value as WebbLevel)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all bg-white"
                   >
-                    <option value="L1">Nível 1: Reprodução (Recall)</option>
-                    <option value="L2">Nível 2: Aplicação de Conceitos</option>
-                    <option value="L3">Nível 3: Pensamento Estratégico</option>
-                    <option value="L4">Nível 4: Pensamento Extendido</option>
+                    <option value="L1">{t('webb_l1')}</option>
+                    <option value="L2">{t('webb_l2')}</option>
+                    <option value="L3">{t('webb_l3')}</option>
+                    <option value="L4">{t('webb_l4')}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">Vocabulário Chave (Opcional)</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wider">{t('key_vocabulary_optional')}</label>
                 <div className="flex gap-2 mb-2">
                   <input 
                     type="text"
                     value={vocabInput}
                     onChange={(e) => setVocabInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), vocabInput.trim() && (setKeyVocabulary([...keyVocabulary, vocabInput.trim()]), setVocabInput('')))}
-                    placeholder="Adiciona termos importantes..."
+                    placeholder={t('add_important_terms')}
                     className="flex-1 px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                   />
                   <button 
                     onClick={() => { if (vocabInput.trim()) { setKeyVocabulary([...keyVocabulary, vocabInput.trim()]); setVocabInput(''); } }}
                     className="bg-slate-100 text-slate-600 px-4 py-2 rounded-xl font-bold hover:bg-slate-200 transition-all"
                   >
-                    Adicionar
+                    {t('add')}
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -301,7 +284,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider">Conteúdo</label>
+                  <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider">{t('content')}</label>
                   <div className="flex gap-2">
                     <input 
                       type="file"
@@ -316,7 +299,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                       className="flex items-center gap-2 text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-200 transition-all"
                     >
                       {isParsing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                      <span>{isParsing ? 'A processar...' : 'Carregar Ficheiro (PDF/DOCX/EPUB)'}</span>
+                      <span>{isParsing ? t('processing') : t('upload_file_formats')}</span>
                     </button>
                   </div>
                 </div>
@@ -324,7 +307,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                   rows={12}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Cola aqui o texto ou carrega um ficheiro..."
+                  placeholder={t('paste_text_or_upload')}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
                 />
               </div>
@@ -337,14 +320,14 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                 className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 disabled:opacity-50 transition-all shadow-lg"
               >
                 {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                <span>Gerar Questões com IA</span>
+                <span>{t('generate_questions_ai')}</span>
               </button>
               <button 
                 onClick={() => setStep('questions')}
                 disabled={!title.trim() || !content.trim()}
                 className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg"
               >
-                <span>Próximo Passo</span>
+                <span>{t('next_step')}</span>
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
@@ -369,7 +352,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                   
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">Questão {qIdx + 1}</label>
+                      <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">{t('question')} {qIdx + 1}</label>
                       <input 
                         type="text"
                         value={q.question}
@@ -394,7 +377,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                             value={option}
                             onChange={(e) => updateOption(qIdx, oIdx, e.target.value)}
                             className="flex-1 px-4 py-2 rounded-xl border border-slate-100 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                            placeholder={`Opção ${oIdx + 1}`}
+                            placeholder={`${t('option')} ${oIdx + 1}`}
                           />
                         </div>
                       ))}
@@ -410,7 +393,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                 className="flex items-center gap-2 text-slate-600 font-bold hover:text-slate-900"
               >
                 <ChevronLeft className="w-5 h-5" />
-                <span>Voltar ao Texto</span>
+                <span>{t('back_to_text')}</span>
               </button>
               
               <div className="flex gap-4">
@@ -419,7 +402,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                   className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all"
                 >
                   <PlusCircle className="w-5 h-5" />
-                  <span>Adicionar Questão</span>
+                  <span>{t('add_question')}</span>
                 </button>
                 <button 
                   onClick={handleSave}
@@ -427,7 +410,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ userProfile, onComplete 
                   className="flex items-center gap-2 bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg"
                 >
                   {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                  <span>Guardar e Publicar</span>
+                  <span>{t('save_and_publish')}</span>
                 </button>
               </div>
             </div>
